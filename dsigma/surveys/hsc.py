@@ -42,9 +42,24 @@ def default_column_keys(version=default_version):
             'm': 'ishape_hsm_regauss_derived_shear_bias_m',
             'e_rms': 'ishape_hsm_regauss_derived_rms_e',
             'R_2': 'ishape_hsm_regauss_resolution'}
+    elif version == 'Y3':
+        keys = {
+            'ra': 'i_ra',
+            'dec': 'i_dec',
+            'z': 'dnnz_photoz_best',
+            'z_low': 'dnnz_photoz_err95_min',
+            'e_1': 'i_hsmshaperegauss_e1',
+            'e_2': 'i_hsmshaperegauss_e2',
+            'w': 'i_hsmshaperegauss_derived_weight',
+            'm': 'i_hsmshaperegauss_derived_shear_bias_m',
+            'e_rms': 'i_hsmshaperegauss_derived_rms_e',
+            'R_2': 'i_hsmshaperegauss_resolution',
+            'c_1': 'i_hsmshaperegauss_derived_shear_bias_c1',
+            'c_2': 'i_hsmshaperegauss_derived_shear_bias_c2'
+        }
     else:
         raise ValueError(
-            "Unkown version of DES. Supported versions are {}.".format(
+            "Unkown version of HSC. Supported versions are {}.".format(
                 known_versions))
 
     return keys
