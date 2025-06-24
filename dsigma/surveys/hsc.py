@@ -82,7 +82,7 @@ def multiplicative_selection_bias(table_s, version=default_version):
         return (table_s['R_2'] < 0.3 + d_R_2) / d_R_2 * 0.00865
     elif version in ['Y3', 'PDR3', 'S19A']:
         # eq. (18) in 2304.00703
-        return (0.01919 * (table_s['R_2'] < 0.3 + d_R_2) / d_R_2 +
+        return (0.01919 * (table_s['R_2'] < 0.3 + d_R_2) / d_R_2 -
                 0.05854 * (table_s['mag_A'] > 25.5 - d_mag_A) / d_mag_A)
     else:
         raise ValueError(

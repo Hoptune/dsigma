@@ -400,7 +400,7 @@ def tangential_shear(table_l, table_r=None, boost_correction=False,
     if selection_bias_correction:
         result['1+m_sel'] = 1 + scalar_shear_response_factor(
             table_l, selection_bias=True)
-        result['et'] *= result['1+m_sel']
+        result['et'] /= result['1+m_sel']
 
     if random_subtraction:
         if table_r is None:
@@ -512,7 +512,7 @@ def excess_surface_density(table_l, table_r=None,
     if selection_bias_correction:
         result['1+m_sel'] = 1 + scalar_shear_response_factor(
             table_l, selection_bias=True)
-        result['ds'] *= result['1+m_sel']
+        result['ds'] /= result['1+m_sel']
 
     if photo_z_dilution_correction:
         result['f_bias'] = photo_z_dilution_factor(table_l)
