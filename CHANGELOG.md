@@ -6,15 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The function `survey.hsc.multiplicative_selection_bias` to compute `m_sel` for HSC was added.
+- `Y3` was added as a supported version to the `survey.hsc` functions.
+
 ### Changed
 
 - The way multiplicative selection biases are handled was changed in order for the code to be more general. Specifically, the `hsc_selection_bias_correction` keyword argument in `dsigma.stacking.excess_surface_density` was replaced by the `selection_bias_correction` keyword argument. For this to work, a `m_sel` column needs to be added to the source table before the precomputation.
 - 'Y3' is now the default version for HSC.
 
-### Added
+### Fixed
 
-- The function `survey.hsc.multiplicative_selection_bias` to compute `m_sel` for HSC was added.
-- `Y3` was added as a supported version to the `survey.hsc` functions.
+- The HSC Y1 selection bias was applied incorrectly. Instead of dividing by `1+m_sel`, the result was multiplied by `1+m_sel`. This bug goes back to the overhaul of `dsigma` in 2020. Fortunately, this only caused an error at the level of around 2%, well below statistical significance of actual measurements.
 
 ### Removed
 
