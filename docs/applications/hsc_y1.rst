@@ -53,8 +53,8 @@ First, we must put the data into a format easily understandable by :code:`dsigma
     from dsigma.surveys import hsc
 
     table_s = Table.read('hsc_y1.fits')
-    table_s = dsigma_table(table_s, 'source', survey='HSC')
-    table_s['m_sel'] = hsc.multiplicative_selection_bias(table_s)
+    table_s = dsigma_table(table_s, 'source', survey='HSC', version='Y1')
+    table_s['m_sel'] = hsc.multiplicative_selection_bias(table_s, version='Y1')
 
     table_c_1 = vstack([Table.read('pdf-s17a_wide-9812.cat.fits'),
                         Table.read('pdf-s17a_wide-9813.cat.fits')])
