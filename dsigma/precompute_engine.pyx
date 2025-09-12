@@ -94,6 +94,7 @@ def precompute_engine(
         d_com_zmids = d_com_z
         n_z_mids = len(z_pz_pivots)
         pz = table_s['pz']
+        print("Integration of PDF(z) is enabled. z_mesh: {}, d_com: {}".format(z_mids, d_com_zmids))
 
     cdef bint has_m = 'm' in table_s.keys()
     cdef double[::1] m
