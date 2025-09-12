@@ -183,7 +183,7 @@ def precompute(
         table_l, table_s, bins, table_c=None, table_n=None,
         cosmology=FlatLambdaCDM(H0=100, Om0=0.3), comoving=True,
         weighting=-2, lens_source_cut=0, nside=256, n_jobs=1,
-        progress_bar=False):
+        progress_bar=False, use_pz=False, z_pz_pivots=None):
     """For all lenses in the catalog, precompute the lensing statistics.
 
     Parameters
@@ -233,6 +233,13 @@ def precompute(
     progress_bar : bool, option
         Whether to show a progress bar for the main loop over lens pixels.
         Default is False.
+    use_pz : bool, optional
+        Whether to use the full photometric redshift probability distribution
+        functions of the sources to calculate the effective critical surface
+        densities. If True, the source table needs to have a `pz` column.
+    z_pz_pivots : numpy.ndarray, optional
+        The mid-points of the photometric redshift bins for the `pz` column in
+        the source table. Only required if `use_pz` is True.
 
     Returns
     -------
@@ -386,10 +393,20 @@ def precompute(
         # lens.
         table_engine_s['z'] = np.ascontiguousarray(
             z_mean[table_s['z_bin']][argsort_pix_s], dtype=np.float64)
-
+    elif use_pz and z_pz_pivots is not None:
+        if 'pz' not in table_s.colnames:
+            raise ValueError('To use photometric redshift probability ' +
+                             'distributions, the source table needs to ' +
+                             'have a `pz` column.')
+        table_engine_s['pz'] = np.ascontiguousarray(
+            table_s['pz'][argsort_pix_s].flatten(), dtype=np.float64)
+        z_pz_pivots = np.ascontiguousarray(z_pz_pivots, dtype=np.float64)
+        d_com_zs = np.ascontiguousarray(cosmology.comoving_transverse_distance(z_pz_pivots).to(u.Mpc).value)
     elif table_c is not None and table_s is not None:
         raise ValueError('table_c and table_n cannot both be given.')
-
+    else:
+        z_pz_pivots = None
+        d_com_zs = None
     # Create arrays that will hold the final results.
     table_engine_r = {}
     n_results = len(table_l) * (len(bins) - 1)
@@ -451,7 +468,7 @@ def precompute(
 
     args = (u_pix_l, n_pix_l, u_pix_s, n_pix_s, dist_3d_sq_bins,
             table_engine_l, table_engine_s, table_engine_r, bins, comoving,
-            weighting, nside, queue, progress_bar)
+            weighting, nside, queue, progress_bar, z_pz_pivots, d_com_zs)
 
     if n_jobs == 1:
         precompute_engine(*args)

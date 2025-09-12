@@ -17,23 +17,39 @@ cdef double sigma_crit_factor = (
     1e-6 * c.c**2 / (4 * np.pi * c.G)).to(u.Msun / u.pc).value
 cdef double deg2rad = np.pi / 180.0
 
-cdef double dx, dy, dz
+# cdef double dx, dy, dz
 
 cdef double dist_3d_sq(double sin_ra_1, double cos_ra_1, double sin_dec_1,
                        double cos_dec_1, double sin_ra_2, double cos_ra_2,
                        double sin_dec_2, double cos_dec_2):
 
-    dx = cos_ra_1 * cos_dec_1 - cos_ra_2 * cos_dec_2
-    dy = sin_ra_1 * cos_dec_1 - sin_ra_2 * cos_dec_2
-    dz = sin_dec_1 - sin_dec_2
+    cdef double dx = cos_ra_1 * cos_dec_1 - cos_ra_2 * cos_dec_2
+    cdef double dy = sin_ra_1 * cos_dec_1 - sin_ra_2 * cos_dec_2
+    cdef double dz = sin_dec_1 - sin_dec_2
 
     return dx * dx + dy * dy + dz * dz
 
+cdef double get_avg_inv_sigma_crit(double[::1] z, double[::1] d_com_z,
+        double[::1] p_z, double z_l, double d_com_l):
+    
+    cdef double d_com_l_factor = d_com_l / (1 + z_l) / sigma_crit_factor
+    cdef double avg_inv_sigma = .0
+    cdef double w_z = .0
+    cdef int i
+    cdef int n = z.shape[0]
+    for i in range(n):
+        if z[i] <= z_l:
+            continue
+        w_z += p_z[i]
+        avg_inv_sigma += p_z[i] * (d_com_z[i] - d_com_l) / d_com_z[i] 
+    if w_z == 0.0:
+        return 0.0
+    return avg_inv_sigma / w_z * d_com_l_factor
 
 def precompute_engine(
         u_pix_l, n_pix_l_in, u_pix_s, n_pix_s_in, dist_3d_sq_bins_in,
         table_l, table_s, table_r, bins, bint comoving, float weighting,
-        int nside, queue, progress_bar):
+        int nside, queue, progress_bar, z_pz_pivots=None, d_com_z=None):
 
     cdef long[::1] n_pix_l = n_pix_l_in
     cdef long[::1] n_pix_s = n_pix_s_in
@@ -56,6 +72,8 @@ def precompute_engine(
     cdef double[::1] z_l_max = table_s['z_l_max']
 
     cdef bint has_sigma_crit_eff = 'sigma_crit_eff' in table_l.keys()
+    cdef bint has_pz = 'pz' in table_s.keys()
+
     cdef int n_z_bins = 0
     cdef double[::1] sigma_crit_eff
     cdef long[::1] z_bin
@@ -63,6 +81,19 @@ def precompute_engine(
         n_z_bins = len(table_l['sigma_crit_eff']) // len(table_l['z'])
         sigma_crit_eff = table_l['sigma_crit_eff']
         z_bin = table_s['z_bin']
+    
+    cdef double[::1] z_mids
+    cdef double[::1] d_com_zmids
+    cdef double[::1] pz
+    cdef int n_z_mids = 0
+    if has_pz:
+        assert (not has_sigma_crit_eff) and (z_pz_pivots is not None) and \
+        (d_com_z is not None), \
+        "has_sigma_crit_eff is set or z_pz_pivots is not provided or d_com_z is not provided"
+        z_mids = z_pz_pivots
+        d_com_zmids = d_com_z
+        n_z_mids = len(z_pz_pivots)
+        pz = table_s['pz']
 
     cdef bint has_m = 'm' in table_s.keys()
     cdef double[::1] m
@@ -126,7 +157,7 @@ def precompute_engine(
     cdef double dist_3d_sq_max, dist_3d_sq_ls
     cdef double sin_ra_l_minus_ra_s, cos_ra_l_minus_ra_s
     cdef double sin_2phi, cos_2phi, tan_phi, tan_phi_num, tan_phi_den, e_t
-    cdef double w_ls, sigma_crit
+    cdef double w_ls, sigma_crit, inv_sigma_crit
     cdef double max_pixrad = 1.05 * hp.pixel_resolution.to(u.deg).value
     cdef double inf = float('inf'), summand
 
@@ -204,6 +235,17 @@ def precompute_engine(
                     if has_sigma_crit_eff:
                         sigma_crit = sigma_crit_eff[
                             i_l * n_z_bins + z_bin[i_s]]
+                    elif has_pz:
+                        cdef double* pz_ptr = &pz[i_s * n_z_mids]
+                        inv_sigma_crit = get_avg_inv_sigma_crit(
+                            z_mids, d_com_zmids, pz_ptr,
+                            z_l[i_l], d_com_l[i_l])
+                        if inv_sigma_crit == 0:
+                            sigma_crit = inf
+                        else:
+                            sigma_crit = 1.0 / inv_sigma_crit
+                        if comoving:
+                            sigma_crit /= (1.0 + z_l[i_l]) * (1.0 + z_l[i_l])
                     elif d_com_l[i_l] < d_com_s[i_s]:
                         sigma_crit = (sigma_crit_factor * (1 + z_l[i_l]) *
                             d_com_s[i_s] / d_com_l[i_l] /
