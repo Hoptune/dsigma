@@ -30,7 +30,7 @@ cdef double dist_3d_sq(double sin_ra_1, double cos_ra_1, double sin_dec_1,
     return dx * dx + dy * dy + dz * dz
 
 cdef double get_avg_inv_sigma_crit(double[::1] z, double[::1] d_com_z,
-        double[::1] p_z, double z_l, double d_com_l):
+        double* p_z, double z_l, double d_com_l):
     
     cdef double d_com_l_factor = d_com_l / (1 + z_l) / sigma_crit_factor
     cdef double avg_inv_sigma = .0
@@ -161,7 +161,7 @@ def precompute_engine(
     cdef double max_pixrad = 1.05 * hp.pixel_resolution.to(u.deg).value
     cdef double inf = float('inf'), summand
     cdef double* pz_ptr
-    
+
     if progress_bar:
         pbar = tqdm(total=len(u_pix_l))
 
