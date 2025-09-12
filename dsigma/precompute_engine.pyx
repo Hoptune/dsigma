@@ -160,7 +160,8 @@ def precompute_engine(
     cdef double w_ls, sigma_crit, inv_sigma_crit
     cdef double max_pixrad = 1.05 * hp.pixel_resolution.to(u.deg).value
     cdef double inf = float('inf'), summand
-
+    cdef double* pz_ptr
+    
     if progress_bar:
         pbar = tqdm(total=len(u_pix_l))
 
@@ -236,7 +237,7 @@ def precompute_engine(
                         sigma_crit = sigma_crit_eff[
                             i_l * n_z_bins + z_bin[i_s]]
                     elif has_pz:
-                        cdef double* pz_ptr = &pz[i_s * n_z_mids]
+                        pz_ptr = &pz[i_s * n_z_mids]
                         inv_sigma_crit = get_avg_inv_sigma_crit(
                             z_mids, d_com_zmids, pz_ptr,
                             z_l[i_l], d_com_l[i_l])
