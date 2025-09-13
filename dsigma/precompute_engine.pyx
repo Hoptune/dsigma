@@ -95,7 +95,8 @@ def precompute_engine(
         n_z_mids = len(z_pz_pivots)
         pz = table_s['pz']
         print("Integration of PDF(z) is enabled. z_mesh: {}, d_com: {}".format(z_mids, d_com_zmids))
-
+    else:
+        print("not having pz")
     cdef bint has_m = 'm' in table_s.keys()
     cdef double[::1] m
     if has_m:
@@ -161,7 +162,7 @@ def precompute_engine(
     cdef double w_ls, sigma_crit, inv_sigma_crit
     cdef double max_pixrad = 1.05 * hp.pixel_resolution.to(u.deg).value
     cdef double inf = float('inf'), summand
-    cdef double* pz_ptr
+    cdef double[::1] pz_sel
 
     if progress_bar:
         pbar = tqdm(total=len(u_pix_l))
@@ -238,9 +239,9 @@ def precompute_engine(
                         sigma_crit = sigma_crit_eff[
                             i_l * n_z_bins + z_bin[i_s]]
                     elif has_pz:
-                        pz_ptr = &pz[i_s * n_z_mids]
+                        pz_sel = pz[i_s * n_z_mids:(i_s + 1) * n_z_mids]
                         inv_sigma_crit = get_avg_inv_sigma_crit(
-                            z_mids, d_com_zmids, pz_ptr,
+                            z_mids, d_com_zmids, pz_sel,
                             z_l[i_l], d_com_l[i_l])
                         if inv_sigma_crit == 0:
                             sigma_crit = inf
