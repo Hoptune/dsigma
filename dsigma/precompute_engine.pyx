@@ -49,7 +49,7 @@ cdef double get_avg_inv_sigma_crit(double[::1] z, double[::1] d_com_z,
 def precompute_engine(
         u_pix_l, n_pix_l_in, u_pix_s, n_pix_s_in, dist_3d_sq_bins_in,
         table_l, table_s, table_r, bins, bint comoving, float weighting,
-        int nside, queue, progress_bar, z_pz_pivots=None, d_com_z=None):
+        int nside, queue, z_pz_pivots=None, d_com_z=None, progress_bar=False):
 
     cdef long[::1] n_pix_l = n_pix_l_in
     cdef long[::1] n_pix_s = n_pix_s_in

@@ -468,7 +468,7 @@ def precompute(
 
     args = (u_pix_l, n_pix_l, u_pix_s, n_pix_s, dist_3d_sq_bins,
             table_engine_l, table_engine_s, table_engine_r, bins, comoving,
-            weighting, nside, queue, progress_bar, z_pz_pivots, d_com_zs)
+            weighting, nside, queue, z_pz_pivots, d_com_zs, progress_bar)
 
     if n_jobs == 1:
         precompute_engine(*args)
