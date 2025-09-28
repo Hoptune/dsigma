@@ -52,7 +52,9 @@ def default_column_keys(version=default_version):
             'e_rms': 'i_hsmshaperegauss_derived_rms_e',
             'R_2': 'i_hsmshaperegauss_resolution',
             'z_bin': 'hsc_y3_zbin',
-            'mag_A': 'i_apertureflux_10_mag'}
+            'mag_A': 'i_apertureflux_10_mag',
+            'c_1': 'i_hsmshaperegauss_derived_shear_bias_c1',
+            'c_2': 'i_hsmshaperegauss_derived_shear_bias_c2'}
     else:
         raise ValueError(
             "Unkown version of HSC. Supported versions are {}.".format(

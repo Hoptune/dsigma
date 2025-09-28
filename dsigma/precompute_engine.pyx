@@ -120,6 +120,10 @@ def precompute_engine(
         R_21 = table_s['R_21']
         R_22 = table_s['R_22']
 
+    cdef bint has_c1_c2 = ('c_1' in table_s.keys() and 'c_2' in table_s.keys())
+    cdef double[::1] c_1 = table_s['c_1']
+    cdef double[::1] c_2 = table_s['c_2']
+
     cdef double[::1] dist_3d_sq_bins = dist_3d_sq_bins_in
 
     cdef long[::1] sum_1 = table_r['sum 1']
@@ -140,6 +144,9 @@ def precompute_engine(
     cdef double[::1] sum_w_ls_R_T
     if has_R_matrix:
         sum_w_ls_R_T = table_r['sum w_ls R_T']
+    cdef double[::1] sum_w_ls_c_t
+    if has_c1_c2:
+        sum_w_ls_c_t = table_r['sum w_ls c_t']
 
     hp = HEALPix(nside, order='ring')
     lon, lat = hp.healpix_to_lonlat(np.arange(hp.npix))
@@ -299,6 +306,9 @@ def precompute_engine(
                     sum_w_ls_sigma_crit[offset_result + i_bin] += w_ls * sigma_crit
                     if has_m:
                         sum_w_ls_m[offset_result + i_bin] += w_ls * m[i_s]
+                    if has_c1_c2:
+                        sum_w_ls_c_t[offset_result + i_bin] += w_ls * \
+                            (-c_1[i_s] * cos_2phi + c_2[i_s] * sin_2phi)
                     if has_e_rms:
                         sum_w_ls_1_minus_e_rms_sq[offset_result + i_bin] += (
                             w_ls * (1 - e_rms[i_s] * e_rms[i_s]))

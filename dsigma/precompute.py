@@ -308,7 +308,7 @@ def precompute(
                         argsort_pix])
 
     for key in ['w', 'e_1', 'e_2', 'm', 'e_rms', 'm_sel', 'R_11', 'R_22',
-                'R_12', 'R_21']:
+                'R_12', 'R_21', 'c_1', 'c_2']:
         if key in table_s.colnames:
             table_engine_s[key] = np.ascontiguousarray(
                 table_s[key][argsort_pix_s], dtype=np.float64)
@@ -430,6 +430,9 @@ def precompute(
     if (('R_11' in table_s.colnames) and ('R_12' in table_s.colnames) and
             ('R_21' in table_s.colnames) and ('R_22' in table_s.colnames)):
         key_list.append('sum w_ls R_T')
+
+    if 'c_1' in table_s.colnames and 'c_2' in table_s.colnames:
+        key_list.append('sum w_ls c_t')
 
     for key in key_list:
         table_engine_r[key] = np.ascontiguousarray(

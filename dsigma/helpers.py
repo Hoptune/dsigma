@@ -157,7 +157,10 @@ def dsigma_table(table, table_type, survey=None, version=None, copy=False,
         table_out['e_2'] = - table_out['e_2']
         if verbose:
             print("Info: Flipping sign of e_2 component.")
-
+        if 'c_2' in table_out.colnames:
+            table_out['c_2'] = - table_out['c_2']
+            if verbose:
+                print("Info: Flipping sign of c_2 component.")
     return table_out
 
 
