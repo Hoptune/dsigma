@@ -316,7 +316,11 @@ def precompute(
     if lens_source_cut is None:
         z_l_max = np.repeat(np.amax(table_l['z']) + 1, len(table_s))
     elif isinstance(lens_source_cut, numbers.Number):
-        z_l_max = table_s['z'] - lens_source_cut
+        if 'z_low' in table_s.colnames:
+            print("Using z_low for lens-source cut.")
+            z_l_max = table_s['z_low'] - lens_source_cut
+        else:
+            z_l_max = table_s['z'] - lens_source_cut
     else:
         z_l_max = np.array(lens_source_cut)
 
