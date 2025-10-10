@@ -7,7 +7,7 @@ __all__ = ['default_version', 'known_versions', 'e_2_convention',
            'multiplicative_shear_bias', 'selection_response']
 
 default_version = 'Y3'
-known_versions = ['Y1', 'Y3']
+known_versions = ['Y1', 'Y3', 'DECADE']
 e_2_convention = 'standard'
 
 
@@ -70,6 +70,28 @@ def default_column_keys(version=default_version):
             'flags_select_1m': 'flags_select_1m',
             'flags_select_2p': 'flags_select_2p',
             'flags_select_2m': 'flags_select_2m'}
+    elif version == 'DECADE':
+        keys = {
+            'ra': 'ra',
+            'dec': 'dec',
+            'z': np.nan,
+            'z_bin': 'bhat',
+            'e_1': 'e_1',
+            'e_2': 'e_2',
+            'w': 'weight',
+            'w_1p': 'weight_1p',
+            'w_1m': 'weight_1m',
+            'w_2p': 'weight_2p',
+            'w_2m': 'weight_2m',
+            'R_11': 'R11',
+            'R_12': 'R12',
+            'R_21': 'R21',
+            'R_22': 'R22',
+            'flags_select': 'flags_select',
+            'flags_select_1p': 'flags_select_1p',
+            'flags_select_1m': 'flags_select_1m',
+            'flags_select_2p': 'flags_select_2p',
+            'flags_select_2m': 'flags_select_2m'}
     else:
         raise ValueError(
             "Unkown version of DES. Supported versions are {}.".format(
@@ -107,6 +129,8 @@ def tomographic_redshift_bin(z_s, version=default_version):
     elif version == 'Y3':
         raise ValueError('DES Y3 assigns redshift bins based on colors, ' +
                          'not photometric redshifts.')
+    elif version == 'DECADE':
+        z_bins = [.0, .381, .619, .803, 2.0]
     else:
         raise ValueError(
             "Unkown version of DES. Supported versions are {}.".format(
@@ -156,7 +180,10 @@ def multiplicative_shear_bias(z_bin, version=default_version):
     elif version == 'Y3':
         m = np.array([-0.63, -1.98, -2.41, -3.69]) * 0.01
         return np.where(z_bin != -1, m[z_bin], np.nan)
-
+    
+    elif version == 'DECADE':
+        m = np.array([-0.923, -1.895, -4.004, -3.733]) * 0.01
+        return np.where(z_bin != -1, m[z_bin], np.nan)
     else:
         raise ValueError(
             "Unkown version of DES. Supported versions are {}.".format(
@@ -194,7 +221,7 @@ def selection_response(table_s, version=default_version):
                 select_m = table_s['flags_select_{}m'.format(i + 1)]
             e = table_s['e_{}'.format(j + 1)]
 
-            if version == 'Y3':
+            if version == 'Y3' or version == 'DECADE':
                 w_p = table_s['w_{}p'.format(i + 1)]
                 w_m = table_s['w_{}m'.format(i + 1)]
             else:

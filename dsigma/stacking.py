@@ -154,6 +154,33 @@ def scalar_shear_response_factor(table_l, selection_bias=False):
         np.sum(table_l['sum w_ls'].data *
                table_l['w_sys'].data[:, None], axis=0))
 
+def additive_bias(table_l, sigma_crit=True):
+    r"""Compute the tangential additive bias.
+    The additive bias :math:`c_t` is defined such that
+    `\gamma_{\mathrm obs} = (1 + m ) \gamma_{\mathrm intrinsic} + c_t`.
+
+    Parameters
+    ----------
+    table_l : astropy.table.Table
+        Precompute results for the lenses.
+
+    Returns
+    -------
+    ct : numpy.ndarray
+        Tangential additive bias in each radial bin.
+    """
+    if sigma_crit:
+        return (
+                np.sum(table_l['sum w_ls c_t sigma_crit'].data *
+                    table_l['w_sys'].data[:, None], axis=0) /
+                np.sum(table_l['sum w_ls'].data *
+                    table_l['w_sys'].data[:, None], axis=0))
+    else:
+        return (
+                np.sum(table_l['sum w_ls c_t'].data *
+                    table_l['w_sys'].data[:, None], axis=0) /
+                np.sum(table_l['sum w_ls'].data *
+                    table_l['w_sys'].data[:, None], axis=0))
 
 def matrix_shear_response_factor(table_l):
     r"""Compute the mean tangential response.
@@ -317,11 +344,12 @@ def lens_magnification_bias(table_l, alpha_l, camb_results,
 
 
 def tangential_shear(table_l, table_r=None, boost_correction=False,
+                     additive_bias_correction=False,
                      scalar_shear_response_correction=False,
                      matrix_shear_response_correction=False,
                      shear_responsivity_correction=False,
                      selection_bias_correction=False,
-                     random_subtraction=False, return_table=False):
+                     random_subtraction=False, return_table=False, order='hsc'):
     """Compute the mean tangential shear with corrections, if applicable.
 
     Parameters
@@ -330,6 +358,8 @@ def tangential_shear(table_l, table_r=None, boost_correction=False,
         Precompute results for the lenses.
     table_r : astropy.table.Table, optional
         Precompute results for random lenses. Default is None.
+    additive_bias_correction : bool, optional
+        If True, correct for the additive bias. Default is False.
     boost_correction : bool, optional
         If True, calculate and apply a boost factor correction. This can only
         be done if a random catalog is provided. Default is False.
@@ -351,6 +381,8 @@ def tangential_shear(table_l, table_r=None, boost_correction=False,
         If True, return a table with many intermediate steps of the
         computation. Otherwise, a simple array with just the final tangential
         shearis returned. Default is False.
+    order : string, optional
+        Order of performing the corrections.
 
     Returns
     -------
@@ -378,42 +410,81 @@ def tangential_shear(table_l, table_r=None, boost_correction=False,
     result['z_l'] = mean_lens_redshift(table_l)
     result['z_s'] = mean_source_redshift(table_l)
 
-    if boost_correction:
-        if table_r is None:
-            raise ValueError('Cannot compute boost factor correction without' +
-                             ' results from a random catalog.')
-        result['b'] = boost_factor(table_l, table_r)
-        result['et'] *= result['b']
+    if order == 'hsc':
+        if shear_responsivity_correction:
+            result['2R'] = 2 * shear_responsivity_factor(table_l)
+            result['et'] /= result['2R']
 
-    if scalar_shear_response_correction:
-        result['1+m'] = 1 + scalar_shear_response_factor(table_l)
-        result['et'] /= result['1+m']
+        if additive_bias_correction:
+            result['ct'] = additive_bias(table_l, sigma_crit=False)
+            result['et'] -= result['ct']
 
-    if matrix_shear_response_correction:
-        result['R_t'] = matrix_shear_response_factor(table_l)
-        result['et'] /= result['R_t']
+        if scalar_shear_response_correction:
+            result['1+m'] = 1 + scalar_shear_response_factor(table_l)
+            result['et'] /= result['1+m']
 
-    if shear_responsivity_correction:
-        result['2R'] = 2 * shear_responsivity_factor(table_l)
-        result['et'] /= result['2R']
+        if random_subtraction:
+            if table_r is None:
+                raise ValueError('Cannot subtract random results without ' +
+                                 'results from a random catalog.')
+            result['et_r'] = tangential_shear(
+                table_r, boost_correction=False,
+                additive_bias_correction=additive_bias_correction,
+                scalar_shear_response_correction=scalar_shear_response_correction,
+                matrix_shear_response_correction=matrix_shear_response_correction,
+                shear_responsivity_correction=shear_responsivity_correction,
+                selection_bias_correction=selection_bias_correction,
+                random_subtraction=False, return_table=False, order=order)
+            result['et'] -= result['et_r']
 
-    if selection_bias_correction:
-        result['1+m_sel'] = 1 + scalar_shear_response_factor(
-            table_l, selection_bias=True)
-        result['et'] /= result['1+m_sel']
+        if boost_correction:
+            if table_r is None:
+                raise ValueError('Cannot compute boost factor correction without' +
+                                 ' results from a random catalog.')
+            result['b'] = boost_factor(table_l, table_r)
+            result['et'] *= result['b']
 
-    if random_subtraction:
-        if table_r is None:
-            raise ValueError('Cannot subtract random results without ' +
-                             'results from a random catalog.')
-        result['et_r'] = tangential_shear(
-            table_r, boost_correction=False,
-            scalar_shear_response_correction=scalar_shear_response_correction,
-            matrix_shear_response_correction=matrix_shear_response_correction,
-            shear_responsivity_correction=shear_responsivity_correction,
-            selection_bias_correction=selection_bias_correction,
-            random_subtraction=False, return_table=False)
-        result['et'] -= result['et_r']
+    else:
+        if boost_correction:
+            if table_r is None:
+                raise ValueError('Cannot compute boost factor correction without' +
+                                ' results from a random catalog.')
+            result['b'] = boost_factor(table_l, table_r)
+            result['et'] *= result['b']
+
+        if additive_bias_correction:
+            result['ct'] = additive_bias(table_l, sigma_crit=False)
+            result['et'] -= result['ct']
+
+        if scalar_shear_response_correction:
+            result['1+m'] = 1 + scalar_shear_response_factor(table_l)
+            result['et'] /= result['1+m']
+
+        if matrix_shear_response_correction:
+            result['R_t'] = matrix_shear_response_factor(table_l)
+            result['et'] /= result['R_t']
+
+        if shear_responsivity_correction:
+            result['2R'] = 2 * shear_responsivity_factor(table_l)
+            result['et'] /= result['2R']
+
+        if selection_bias_correction:
+            result['1+m_sel'] = 1 + scalar_shear_response_factor(
+                table_l, selection_bias=True)
+            result['et'] /= result['1+m_sel']
+
+        if random_subtraction:
+            if table_r is None:
+                raise ValueError('Cannot subtract random results without ' +
+                                'results from a random catalog.')
+            result['et_r'] = tangential_shear(
+                table_r, boost_correction=False, additive_bias_correction=additive_bias_correction,
+                scalar_shear_response_correction=scalar_shear_response_correction,
+                matrix_shear_response_correction=matrix_shear_response_correction,
+                shear_responsivity_correction=shear_responsivity_correction,
+                selection_bias_correction=selection_bias_correction,
+                random_subtraction=False, return_table=False, order=order)
+            result['et'] -= result['et_r']
 
     if not return_table:
         return result['et'].data
@@ -422,6 +493,7 @@ def tangential_shear(table_l, table_r=None, boost_correction=False,
 
 
 def excess_surface_density(table_l, table_r=None,
+                           additive_bias_correction=False,
                            photo_z_dilution_correction=False,
                            boost_correction=False,
                            scalar_shear_response_correction=False,
@@ -429,7 +501,7 @@ def excess_surface_density(table_l, table_r=None,
                            shear_responsivity_correction=False,
                            selection_bias_correction=False,
                            random_subtraction=False,
-                           return_table=False):
+                           return_table=False, order='hsc'):
     """Compute the mean excess surface density with corrections, if applicable.
 
     Parameters
@@ -442,6 +514,8 @@ def excess_surface_density(table_l, table_r=None,
         If True, correct for photo-z biases. This can only be done if a
         calibration catalog has been provided in the precomputation phase.
         Default is False.
+    additive_bias_correction : bool, optional
+        If True, correct for the additive bias. Default is False.
     boost_correction : bool, optional
         If true, calculate and apply a boost factor correction. This can only
         be done if a random catalog is provided. Default is False.
@@ -490,47 +564,82 @@ def excess_surface_density(table_l, table_r=None,
     result['z_l'] = mean_lens_redshift(table_l)
     result['z_s'] = mean_source_redshift(table_l)
 
-    if boost_correction:
-        if table_r is None:
-            raise ValueError('Cannot compute boost factor correction without' +
-                             ' results from a random catalog.')
-        result['b'] = boost_factor(table_l, table_r)
-        result['ds'] *= result['b']
+    if order == 'hsc':
+        if shear_responsivity_correction:
+            result['2R'] = 2 * shear_responsivity_factor(table_l)
+            result['ds'] /= result['2R']
 
-    if scalar_shear_response_correction:
-        result['1+m'] = 1 + scalar_shear_response_factor(table_l)
-        result['ds'] /= result['1+m']
+        if additive_bias_correction:
+            result['ct_sigma_crit'] = additive_bias(table_l, sigma_crit=True)
+            result['ds'] -= result['ct_sigma_crit']
 
-    if matrix_shear_response_correction:
-        result['R_t'] = matrix_shear_response_factor(table_l)
-        result['ds'] /= result['R_t']
+        if scalar_shear_response_correction:
+            result['1+m'] = 1 + scalar_shear_response_factor(table_l)
+            result['ds'] /= result['1+m']
 
-    if shear_responsivity_correction:
-        result['2R'] = 2 * shear_responsivity_factor(table_l)
-        result['ds'] /= result['2R']
+        if random_subtraction:
+            if table_r is None:
+                raise ValueError('Cannot subtract random results without ' +
+                                 'results from a random catalog.')
+            result['ds_r'] = excess_surface_density(
+                table_r, photo_z_dilution_correction=photo_z_dilution_correction,
+                boost_correction=False,
+                additive_bias_correction=additive_bias_correction,
+                scalar_shear_response_correction=scalar_shear_response_correction,
+                matrix_shear_response_correction=matrix_shear_response_correction,
+                shear_responsivity_correction=shear_responsivity_correction,
+                selection_bias_correction=selection_bias_correction,
+                random_subtraction=False, return_table=False, order=order)
+            result['ds'] -= result['ds_r']
 
-    if selection_bias_correction:
-        result['1+m_sel'] = 1 + scalar_shear_response_factor(
-            table_l, selection_bias=True)
-        result['ds'] /= result['1+m_sel']
+        if boost_correction:
+            if table_r is None:
+                raise ValueError('Cannot compute boost factor correction without' +
+                                 ' results from a random catalog.')
+            result['b'] = boost_factor(table_l, table_r)
+            result['ds'] *= result['b']
+    else:
+        if boost_correction:
+            if table_r is None:
+                raise ValueError('Cannot compute boost factor correction without' +
+                                ' results from a random catalog.')
+            result['b'] = boost_factor(table_l, table_r)
+            result['ds'] *= result['b']
 
-    if photo_z_dilution_correction:
-        result['f_bias'] = photo_z_dilution_factor(table_l)
-        result['ds'] *= result['f_bias']
+        if scalar_shear_response_correction:
+            result['1+m'] = 1 + scalar_shear_response_factor(table_l)
+            result['ds'] /= result['1+m']
 
-    if random_subtraction:
-        if table_r is None:
-            raise ValueError('Cannot subtract random results without ' +
-                             'results from a random catalog.')
-        result['ds_r'] = excess_surface_density(
-            table_r, photo_z_dilution_correction=photo_z_dilution_correction,
-            boost_correction=False,
-            scalar_shear_response_correction=scalar_shear_response_correction,
-            matrix_shear_response_correction=matrix_shear_response_correction,
-            shear_responsivity_correction=shear_responsivity_correction,
-            selection_bias_correction=selection_bias_correction,
-            random_subtraction=False, return_table=False)
-        result['ds'] -= result['ds_r']
+        if matrix_shear_response_correction:
+            result['R_t'] = matrix_shear_response_factor(table_l)
+            result['ds'] /= result['R_t']
+
+        if shear_responsivity_correction:
+            result['2R'] = 2 * shear_responsivity_factor(table_l)
+            result['ds'] /= result['2R']
+
+        if selection_bias_correction:
+            result['1+m_sel'] = 1 + scalar_shear_response_factor(
+                table_l, selection_bias=True)
+            result['ds'] /= result['1+m_sel']
+
+        if photo_z_dilution_correction:
+            result['f_bias'] = photo_z_dilution_factor(table_l)
+            result['ds'] *= result['f_bias']
+
+        if random_subtraction:
+            if table_r is None:
+                raise ValueError('Cannot subtract random results without ' +
+                                'results from a random catalog.')
+            result['ds_r'] = excess_surface_density(
+                table_r, photo_z_dilution_correction=photo_z_dilution_correction,
+                boost_correction=False,
+                scalar_shear_response_correction=scalar_shear_response_correction,
+                matrix_shear_response_correction=matrix_shear_response_correction,
+                shear_responsivity_correction=shear_responsivity_correction,
+                selection_bias_correction=selection_bias_correction,
+                random_subtraction=False, return_table=False)
+            result['ds'] -= result['ds_r']
 
     if not return_table:
         return result['ds'].data

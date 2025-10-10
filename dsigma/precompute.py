@@ -433,6 +433,7 @@ def precompute(
 
     if 'c_1' in table_s.colnames and 'c_2' in table_s.colnames:
         key_list.append('sum w_ls c_t')
+        key_list.append('sum w_ls c_t sigma_crit')
 
     for key in key_list:
         table_engine_r[key] = np.ascontiguousarray(
