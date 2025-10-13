@@ -190,7 +190,7 @@ def multiplicative_shear_bias(z_bin, version=default_version):
                 known_versions))
 
 
-def selection_response(table_s, version=default_version):
+def selection_response(table_s, version=default_version, sel_lab=0):
     """Calculate the DES selection response.
 
     See Sheldon & Huff (2017) and McClintock et al. (2018) for details.
@@ -214,8 +214,8 @@ def selection_response(table_s, version=default_version):
         for j in range(2):
 
             if np.issubdtype(table_s['flags_select_1p'].dtype, np.integer):
-                select_p = table_s['flags_select_{}p'.format(i + 1)] == 0
-                select_m = table_s['flags_select_{}m'.format(i + 1)] == 0
+                select_p = table_s['flags_select_{}p'.format(i + 1)] == sel_lab
+                select_m = table_s['flags_select_{}m'.format(i + 1)] == sel_lab
             else:
                 select_p = table_s['flags_select_{}p'.format(i + 1)]
                 select_m = table_s['flags_select_{}m'.format(i + 1)]
@@ -228,7 +228,7 @@ def selection_response(table_s, version=default_version):
                 w_p = np.ones(len(table_s))
                 w_m = np.ones(len(table_s))
 
-            R_sel[i, j] = (
+            R_sel[j, i] = (
                 np.average(e[select_p], weights=w_p[select_p]) -
                 np.average(e[select_m], weights=w_m[select_m])) / 0.02
 

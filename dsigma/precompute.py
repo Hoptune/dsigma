@@ -397,6 +397,8 @@ def precompute(
         # lens.
         table_engine_s['z'] = np.ascontiguousarray(
             z_mean[table_s['z_bin']][argsort_pix_s], dtype=np.float64)
+        z_pz_pivots = None
+        d_com_zs = None
     elif use_pz and z_pz_pivots is not None:
         if 'pz' not in table_s.colnames:
             raise ValueError('To use photometric redshift probability ' +
