@@ -5,7 +5,7 @@ __all__ = ['default_version', 'known_versions', 'e_2_convention',
            'default_column_keys', 'multiplicative_selection_bias']
 
 default_version = 'Y3'
-known_versions = ['Y1', 'Y3', 'PDR1', 'PDR2', 'PDR3', 'S16A', 'S19A']
+known_versions = ['Y1', 'Y3', 'PDR1', 'PDR2', 'PDR3', 'S16A', 'S19A', 'final']
 e_2_convention = 'flipped'
 
 
@@ -55,6 +55,15 @@ def default_column_keys(version=default_version):
             'mag_A': 'i_apertureflux_10_mag',
             'c_1': 'i_hsmshaperegauss_derived_shear_bias_c1',
             'c_2': 'i_hsmshaperegauss_derived_shear_bias_c2'}
+    elif version == 'final':
+        keys = {
+            'ra': 'ra',
+            'dec': 'dec',
+            'z': 'fzboost_z_best',
+            'z_bin': 'bin_fiducial',
+            'e_1': 'e_1',
+            'e_2': 'e_2'
+        }
     else:
         raise ValueError(
             "Unkown version of HSC. Supported versions are {}.".format(

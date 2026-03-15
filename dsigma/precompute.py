@@ -171,8 +171,14 @@ def get_raw_multiprocessing_array(array):
     if array is None:
         return None
 
-    array_mp = mp.RawArray('l' if np.issubdtype(array.dtype, np.integer) else
-                           'd', len(array))
+    if np.issubdtype(array.dtype, np.integer):
+        typecode = 'l'
+    elif array.dtype == np.float32:
+        typecode = 'f'
+    else:
+        typecode = 'd'
+
+    array_mp = mp.RawArray(typecode, len(array))
     array_np = np.ctypeslib.as_array(array_mp)
     array_np[:] = array
 
@@ -405,7 +411,7 @@ def precompute(
                              'distributions, the source table needs to ' +
                              'have a `pz` column.')
         table_engine_s['pz'] = np.ascontiguousarray(
-            table_s['pz'][argsort_pix_s].flatten(), dtype=np.float64)
+            table_s['pz'][argsort_pix_s].flatten(), dtype=np.float32)
         z_pz_pivots = np.ascontiguousarray(z_pz_pivots, dtype=np.float64)
         d_com_zs = np.ascontiguousarray(cosmology.comoving_transverse_distance(z_pz_pivots).to(u.Mpc).value)
     elif table_c is not None and table_s is not None:
