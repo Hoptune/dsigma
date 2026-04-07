@@ -559,6 +559,7 @@ def excess_surface_density(table_l, table_r=None,
                            additive_bias_correction=False,
                            photo_z_dilution_correction=False,
                            boost_correction=False,
+                           pz_boost_correction=False,
                            scalar_shear_response_correction=False,
                            matrix_shear_response_correction=False,
                            shear_responsivity_correction=False,
@@ -582,6 +583,9 @@ def excess_surface_density(table_l, table_r=None,
     boost_correction : bool, optional
         If true, calculate and apply a boost factor correction. This can only
         be done if a random catalog is provided. Default is False.
+    pz_boost_correction : bool, optional
+        If True, calculate and apply a boost factor correction using the
+        p(z) decomposition method, only if boost_correction is False.
     scalar_shear_response_correction : bool or string, optional
         Whether to correct for the multiplicative shear bias (scalar form).
         Default is False.
@@ -674,6 +678,13 @@ def excess_surface_density(table_l, table_r=None,
         result['b'] = boost_factor(table_l, table_r)
         result['ds'] *= result['b']
 
+    if pz_boost_correction:
+        if table_r is None:
+            raise ValueError('Cannot compute p(z) boost factor correction without' +
+                                ' results from a random catalog.')
+        result['b_pz'] = boost_factor_from_pz(table_l, table_r)
+        # result['ds'] *= result['b_pz']
+    
     if not return_table:
         return result['ds'].data
 
