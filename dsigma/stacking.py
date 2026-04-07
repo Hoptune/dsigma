@@ -6,17 +6,36 @@ from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 from astropy.table import Table
 from astropy.units import UnitConversionError
-
+from scipy.optimize import minimize
 from .physics import mpc_per_degree, lens_magnification_shear_bias
 
 __all__ = ['number_of_pairs', 'raw_tangential_shear',
            'raw_excess_surface_density', 'photo_z_dilution_factor',
-           'boost_factor', 'scalar_shear_response_factor',
+           'boost_factor', 'boost_factor_from_pz', 'scalar_shear_response_factor',
            'matrix_shear_response_factor', 'shear_responsivity_factor',
            'mean_lens_redshift', 'mean_source_redshift',
            'mean_critical_surface_density', 'lens_magnification_bias',
            'tangential_shear', 'excess_surface_density']
 
+def gaussian(x, mu, sigma):
+    """Evaluate a Gaussian function.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        The input values at which to evaluate the Gaussian.
+    mu : float
+        The mean of the Gaussian.
+    sigma : float
+        The standard deviation of the Gaussian.
+
+    Returns
+    -------
+    g : numpy.ndarray
+        The value of the Gaussian function at each input value.
+
+    """
+    return np.exp(-0.5 * ((x - mu) / sigma)**2) / (sigma * np.sqrt(2 * np.pi))
 
 def number_of_pairs(table_l):
     """Compute the number of lens-source pairs per bin.
@@ -122,6 +141,86 @@ def boost_factor(table_l, table_r):
                table_r['w_sys'].data[:, None], axis=0) *
         np.sum(table_r['w_sys'].data))
 
+def boost_factor_from_pz(table_l, table_r, return_pdf=False, optimize_method='L-BFGS-B'):
+    assert 'PDF w_ls z_s' in table_l.colnames, 'table_l must contain PDF w_ls z_s column'
+    z_bins = table_l.meta['boostFactor_pdf_zbins']
+    z_mids = 0.5 * (z_bins[1:] + z_bins[:-1])
+
+    def normalize_pair_pdf(table):
+        sum_w_ls = np.sum(table['sum w_ls'], axis=0)
+        pdf_hist = np.sum(table['PDF w_ls z_s'], axis=0)
+        pdf = np.full(pdf_hist.shape, np.nan, dtype=np.float64)
+        valid = sum_w_ls > 0
+        if not np.any(valid):
+            return pdf, valid
+
+        pdf[valid] = pdf_hist[valid] / sum_w_ls[valid, None]
+        norm = np.trapz(pdf[valid], z_mids, axis=1)
+        finite = np.isfinite(norm) & (norm > 0)
+        valid_indices = np.flatnonzero(valid)
+        valid = np.zeros_like(valid, dtype=bool)
+        if not np.any(finite):
+            pdf[:] = np.nan
+            return pdf, valid
+
+        pdf_valid = pdf[valid_indices[finite]].copy()
+        pdf[:] = np.nan
+        pdf_valid /= norm[finite, None]
+        pdf[valid_indices[finite]] = pdf_valid
+        valid[valid_indices[finite]] = True
+        return pdf, valid
+
+    pdf_z, valid = normalize_pair_pdf(table_l)
+
+    if table_r is not None:
+        pdf_z_r, valid_r = normalize_pair_pdf(table_r)
+        valid &= valid_r
+        background = pdf_z_r
+    else:
+        background = np.full(pdf_z.shape, np.nan, dtype=np.float64)
+        valid_idx = np.flatnonzero(valid)
+        if valid_idx.size:
+            background[valid] = pdf_z[valid_idx[-1]]
+
+    if not np.any(valid):
+        raise ValueError('Cannot compute boost factor from p(z): no radial bins have finite pair-weight PDFs.')
+
+    pdf_z_fit = pdf_z[valid]
+    background_fit = background[valid]
+    nrbins = len(pdf_z)
+    n_fit_bins = len(pdf_z_fit)
+
+    def model_pdf(theta, decompose=False):
+        mean, std = theta[:2]
+        f_s = theta[2:]
+        pdf_fg = f_s[:, None] * gaussian(z_mids, mean, std).reshape(1, -1)
+        pdf_bg = (1 - f_s[:, None]) * background_fit
+        if decompose:
+            return pdf_fg, pdf_bg
+        return pdf_fg + pdf_bg
+
+    def chisq(theta):
+        model = model_pdf(theta, False)
+        return np.sum((pdf_z_fit - model)**2)
+
+    bounds = [(0, 2), (1e-4, .2)] + [(0, 1)] * n_fit_bins
+    init = [0.5, 0.05] + [0.5] * n_fit_bins
+    optres = minimize(chisq, init, bounds=bounds, method=optimize_method, tol=1e-6,
+                      options={'maxiter': 1000})
+    if not optres.success:
+        raise RuntimeError('Optimization failed: ' + optres.message)
+    if return_pdf:
+        pdf_fg, pdf_bg = model_pdf(optres.x, decompose=True)
+        model_fg = np.full(pdf_z.shape, np.nan, dtype=np.float64)
+        model_bg = np.full(pdf_z.shape, np.nan, dtype=np.float64)
+        model_fg[valid] = pdf_fg
+        model_bg[valid] = pdf_bg
+        return {'data': (pdf_z, background), 'model': (model_fg, model_bg),
+                'z_mids': z_mids, 'opt_result': optres}
+
+    boost = np.full(nrbins, np.nan, dtype=np.float64)
+    boost[valid] = 1 / (1. - optres.x[2:])
+    return boost # boost factor is 1/(1-f_s)
 
 def scalar_shear_response_factor(table_l, selection_bias=False):
     r"""Compute the mean shear response.

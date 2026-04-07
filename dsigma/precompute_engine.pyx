@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from astropy_healpix import HEALPix
 from astropy import units as u
-from libc.math cimport sin, cos, sqrt, fmax, pow
+from libc.math cimport sin, cos, sqrt, fmax, pow, isnan
 from scipy.spatial import cKDTree
 
 from astropy import constants as c
@@ -49,7 +49,7 @@ cdef double get_avg_inv_sigma_crit(double[::1] z, double[::1] d_com_z,
 def precompute_engine(
         u_pix_l, n_pix_l_in, u_pix_s, n_pix_s_in, dist_3d_sq_bins_in,
         table_l, table_s, table_r, bins, bint comoving, float weighting,
-        int nside, queue, z_pz_pivots=None, d_com_z=None, progress_bar=False):
+        int nside, queue, z_pz_pivots=None, d_com_z=None, boostFactor_pdf_zbins=None, progress_bar=False):
 
     cdef long[::1] n_pix_l = n_pix_l_in
     cdef long[::1] n_pix_s = n_pix_s_in
@@ -135,6 +135,7 @@ def precompute_engine(
     cdef double[::1] sum_w_ls_e_t_sigma_crit = table_r['sum w_ls e_t sigma_crit']
     cdef double[::1] sum_w_ls_sigma_crit = table_r['sum w_ls sigma_crit']
     cdef double[::1] sum_w_ls_z_s = table_r['sum w_ls z_s']
+    cdef double[::1] pdf_w_ls_z_s = table_r['PDF w_ls z_s']
     cdef double[::1] sum_w_ls_m
     if has_m:
         sum_w_ls_m = table_r['sum w_ls m']
@@ -166,7 +167,9 @@ def precompute_engine(
     cdef long pix_l, i_l, i_l_min, i_l_max
     cdef long pix_s, i_pix_s, l_pix_s, i_s, i_s_min, i_s_max
     cdef long[::1] pix_s_list
-    cdef long i_bin, n_bins = len(bins) - 1
+    cdef long i_bin, i_boost_zbin, n_bins = len(bins) - 1, n_boostFactor_zbins = len(boostFactor_pdf_zbins) - 1
+    cdef double boost_zbin_coord
+    cdef double[::1] boostFactor_pdf_zbins_view = boostFactor_pdf_zbins
     cdef long offset_bin, offset_result
     cdef double dist_3d_sq_max, dist_3d_sq_ls
     cdef double sin_ra_l_minus_ra_s, cos_ra_l_minus_ra_s
@@ -309,6 +312,18 @@ def precompute_engine(
                     sum_w_ls_e_t_sigma_crit[offset_result + i_bin] += summand
                     sum_w_ls_z_s[offset_result + i_bin] += w_ls * z_s[i_s]
                     sum_w_ls_sigma_crit[offset_result + i_bin] += w_ls * sigma_crit
+
+                    boost_zbin_coord = (
+                        (z_s[i_s] - boostFactor_pdf_zbins_view[0]) /
+                        (boostFactor_pdf_zbins_view[1] -
+                         boostFactor_pdf_zbins_view[0]))
+                    if (boost_zbin_coord < 0 or
+                            boost_zbin_coord >= n_boostFactor_zbins or
+                            isnan(boost_zbin_coord)):
+                        pass
+                    else:
+                        i_boost_zbin = <long>boost_zbin_coord
+                        pdf_w_ls_z_s[offset_result*n_boostFactor_zbins + i_bin*n_boostFactor_zbins + i_boost_zbin] += w_ls
                     if has_m:
                         sum_w_ls_m[offset_result + i_bin] += w_ls * m[i_s]
                     if has_c1_c2:

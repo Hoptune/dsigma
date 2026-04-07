@@ -148,3 +148,24 @@ def test_nz(test_catalogs):
     assert np.all(np.isclose(
         stacking.raw_excess_surface_density(table_l),
         stacking.raw_excess_surface_density(table_l_nz), atol=1e-6, rtol=0))
+
+
+def test_boost_factor_from_pz_handles_empty_bins():
+
+    table_l = Table()
+    table_l['sum w_ls'] = np.array([[4.0, 0.0, 4.0]])
+    table_l['PDF w_ls z_s'] = np.array([[[1.0, 2.0, 1.0],
+                                         [0.0, 0.0, 0.0],
+                                         [1.0, 2.0, 1.0]]])
+    table_l.meta['boostFactor_pdf_zbins'] = np.array([0.0, 1.0, 2.0, 3.0])
+
+    boost = stacking.boost_factor_from_pz(table_l, table_r=None)
+    result = stacking.boost_factor_from_pz(table_l, table_r=None,
+                                           return_pdf=True)
+
+    assert np.all(np.isfinite(boost[[0, 2]]))
+    assert np.isnan(boost[1])
+    assert np.all(np.isfinite(result['data'][0][[0, 2]]))
+    assert np.all(np.isnan(result['data'][0][1]))
+    assert np.all(np.isfinite(result['model'][0][[0, 2]]))
+    assert np.all(np.isnan(result['model'][0][1]))

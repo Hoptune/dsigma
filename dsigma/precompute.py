@@ -189,7 +189,7 @@ def precompute(
         table_l, table_s, bins, table_c=None, table_n=None,
         cosmology=FlatLambdaCDM(H0=100, Om0=0.3), comoving=True,
         weighting=-2, lens_source_cut=0, nside=256, n_jobs=1,
-        progress_bar=False, use_pz=False, z_pz_pivots=None):
+        progress_bar=False, use_pz=False, z_pz_pivots=None, boostFactor_pdf_zbins=np.linspace(.0, 2., 201)):
     """For all lenses in the catalog, precompute the lensing statistics.
 
     Parameters
@@ -236,17 +236,18 @@ def precompute(
         It has to be a power of 2. May impact performance. Default is 256.
     n_jobs : int, optional
         Number of jobs to run at the same time. Default is 1.
-    progress_bar : bool, option
+    progress_bar : bool, optional
         Whether to show a progress bar for the main loop over lens pixels.
         Default is False.
     use_pz : bool, optional
         Whether to use the full photometric redshift probability distribution
-        functions of the sources to calculate the effective critical surface
-        densities. If True, the source table needs to have a `pz` column.
+        functions of the sources to calculate Sigma_crit.
+        If True, the source table needs to have a `pz` column.
     z_pz_pivots : numpy.ndarray, optional
         The mid-points of the photometric redshift bins for the `pz` column in
         the source table. Only required if `use_pz` is True.
-
+    boostFactor_pdf_zbins : numpy.ndarray, optional
+        The redshift bins used for the p(z) boost factor calibration.
     Returns
     -------
     table_l : astropy.table.Table
@@ -314,7 +315,7 @@ def precompute(
                         argsort_pix])
 
     for key in ['w', 'e_1', 'e_2', 'm', 'e_rms', 'm_sel', 'R_11', 'R_22',
-                'R_12', 'R_21', 'c_1', 'c_2']:
+                'R_12', 'R_21', 'c_1', 'c_2', 'z']:
         if key in table_s.colnames:
             table_engine_s[key] = np.ascontiguousarray(
                 table_s[key][argsort_pix_s], dtype=np.float64)
@@ -419,12 +420,18 @@ def precompute(
     else:
         z_pz_pivots = None
         d_com_zs = None
+
+    boostFactor_pdf_zbins = np.ascontiguousarray(
+        boostFactor_pdf_zbins, dtype=np.float64)
+    n_boostFactor_zbins = len(boostFactor_pdf_zbins) - 1
     # Create arrays that will hold the final results.
     table_engine_r = {}
     n_results = len(table_l) * (len(bins) - 1)
 
     key_list = ['sum 1', 'sum w_ls', 'sum w_ls e_t', 'sum w_ls z_s',
-                'sum w_ls e_t sigma_crit', 'sum w_ls sigma_crit']
+                'sum w_ls e_t sigma_crit', 'sum w_ls sigma_crit', 'PDF w_ls z_s']
+    # PDF w_ls z_s is to get the p(z) of lens-source pairs,
+    # which is then used for estimating the boost factor with the p(z) decomposition method.
 
     if 'm' in table_s.colnames:
         key_list.append('sum w_ls m')
@@ -444,9 +451,13 @@ def precompute(
         key_list.append('sum w_ls c_t sigma_crit')
 
     for key in key_list:
-        table_engine_r[key] = np.ascontiguousarray(
-            np.zeros(n_results, dtype=(
-                np.int64 if key == 'sum 1' else np.float64)))
+        if key == 'PDF w_ls z_s':
+            table_engine_r[key] = np.ascontiguousarray(
+                np.zeros(n_results*n_boostFactor_zbins, dtype=np.float64))
+        else:
+            table_engine_r[key] = np.ascontiguousarray(
+                np.zeros(n_results, dtype=(
+                    np.int64 if key == 'sum 1' else np.float64)))
 
     z_l = np.array(table_engine_l['z'])
     d_com_l = np.array(table_engine_l['d_com'])
@@ -484,7 +495,7 @@ def precompute(
 
     args = (u_pix_l, n_pix_l, u_pix_s, n_pix_s, dist_3d_sq_bins,
             table_engine_l, table_engine_s, table_engine_r, bins, comoving,
-            weighting, nside, queue, z_pz_pivots, d_com_zs, progress_bar)
+            weighting, nside, queue, z_pz_pivots, d_com_zs, boostFactor_pdf_zbins, progress_bar)
 
     if n_jobs == 1:
         precompute_engine(*args)
@@ -503,8 +514,12 @@ def precompute(
 
     inv_argsort_pix_l = np.argsort(argsort_pix_l)
     for key in table_engine_r.keys():
-        table_l[key] = np.array(table_engine_r[key]).reshape(
-            len(table_l), len(bins) - 1)[inv_argsort_pix_l]
+        if key == 'PDF w_ls z_s':
+            table_l[key] = np.array(table_engine_r[key]).reshape(
+                len(table_l), len(bins) - 1, n_boostFactor_zbins)[inv_argsort_pix_l]
+        else:
+            table_l[key] = np.array(table_engine_r[key]).reshape(
+                len(table_l), len(bins) - 1)[inv_argsort_pix_l]
 
     table_l['sum w_ls z_l'] = table_l['z'][:, np.newaxis] * table_l['sum w_ls']
 
@@ -521,6 +536,7 @@ def precompute(
             table_l['sum w_ls z_s'] - table_l['sum w_ls'] * np.array(
                 table_engine_l['delta z_s'])[inv_argsort_pix_l][:, np.newaxis])
 
+    table_l.meta['boostFactor_pdf_zbins'] = boostFactor_pdf_zbins
     table_l.meta['bins'] = bins
     table_l.meta['comoving'] = comoving
     table_l.meta['H0'] = cosmology.H0.value
