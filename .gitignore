@@ -11,4 +11,5 @@ dsigma/precompute_engine.c
 tutorial/*
 !tutorial/*.py
 !tutorial/*.csv
+.codex
 .vscode/*

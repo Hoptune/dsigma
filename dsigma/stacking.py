@@ -141,7 +141,7 @@ def boost_factor(table_l, table_r):
                table_r['w_sys'].data[:, None], axis=0) *
         np.sum(table_r['w_sys'].data))
 
-def boost_factor_from_pz(table_l, table_r, return_pdf=False, optimize_method='L-BFGS-B'):
+def boost_factor_from_pz(table_l, table_r, return_pdf=False, optimize_method='trust-constr'):
     assert 'PDF w_ls z_s' in table_l.colnames, 'table_l must contain PDF w_ls z_s column'
     z_bins = table_l.meta['boostFactor_pdf_zbins']
     z_mids = 0.5 * (z_bins[1:] + z_bins[:-1])
@@ -203,12 +203,16 @@ def boost_factor_from_pz(table_l, table_r, return_pdf=False, optimize_method='L-
         model = model_pdf(theta, False)
         return np.sum((pdf_z_fit - model)**2)
 
-    bounds = [(0, 2), (1e-4, .2)] + [(0, 1)] * n_fit_bins
+    bounds = [(0, 100), (1e-4, .2)] + [(0, 1)] * n_fit_bins
     init = [0.5, 0.05] + [0.5] * n_fit_bins
     optres = minimize(chisq, init, bounds=bounds, method=optimize_method, tol=1e-6,
                       options={'maxiter': 1000})
     if not optres.success:
         raise RuntimeError('Optimization failed: ' + optres.message)
+
+    boost = np.full(nrbins, np.nan, dtype=np.float64)
+    boost[valid] = 1 / (1. - optres.x[2:])
+    
     if return_pdf:
         pdf_fg, pdf_bg = model_pdf(optres.x, decompose=True)
         model_fg = np.full(pdf_z.shape, np.nan, dtype=np.float64)
@@ -216,10 +220,8 @@ def boost_factor_from_pz(table_l, table_r, return_pdf=False, optimize_method='L-
         model_fg[valid] = pdf_fg
         model_bg[valid] = pdf_bg
         return {'data': (pdf_z, background), 'model': (model_fg, model_bg),
-                'z_mids': z_mids, 'opt_result': optres}
-
-    boost = np.full(nrbins, np.nan, dtype=np.float64)
-    boost[valid] = 1 / (1. - optres.x[2:])
+                'z_mids': z_mids, 'opt_result': optres, 'boost': boost}
+        
     return boost # boost factor is 1/(1-f_s)
 
 def scalar_shear_response_factor(table_l, selection_bias=False):

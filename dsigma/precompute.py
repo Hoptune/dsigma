@@ -184,12 +184,11 @@ def get_raw_multiprocessing_array(array):
 
     return array_mp
 
-
 def precompute(
         table_l, table_s, bins, table_c=None, table_n=None,
         cosmology=FlatLambdaCDM(H0=100, Om0=0.3), comoving=True,
         weighting=-2, lens_source_cut=0, nside=256, n_jobs=1,
-        progress_bar=False, use_pz=False, z_pz_pivots=None, boostFactor_pdf_zbins=np.linspace(.0, 2., 201)):
+        progress_bar=False, use_pz=False, z_pz_pivots=None, boostFactor_pdf_zbins=np.linspace(.0, 2., 101)):
     """For all lenses in the catalog, precompute the lensing statistics.
 
     Parameters
@@ -284,7 +283,7 @@ def precompute(
         if np.amax(table_s['z_bin']) > table_n['n'].data.shape[1]:
             raise ValueError('The source table contains more redshift bins ' +
                              'than where passed via the nz argument.')
-
+    
     hp = HEALPix(nside, order='ring')
     pix_l = hp.lonlat_to_healpix(table_l['ra'] * u.deg, table_l['dec'] * u.deg)
     pix_s = hp.lonlat_to_healpix(table_s['ra'] * u.deg, table_s['dec'] * u.deg)
@@ -304,7 +303,7 @@ def precompute(
         table_l['z'][argsort_pix_l], dtype=np.float64)
     table_engine_s['z'] = np.ascontiguousarray(
         table_s['z'][argsort_pix_s], dtype=np.float64)
-
+    
     for f, f_name in zip([np.sin, np.cos], ['sin', 'cos']):
         for table, argsort_pix, table_engine in zip(
                 [table_l, table_s], [argsort_pix_l, argsort_pix_s],
@@ -340,12 +339,16 @@ def precompute(
 
         z_min = np.amin(table['z'])
         z_max = np.amax(table['z'])
+        # z_min, z_max = .0, 10.
+        z_min = .0 if z_min < .0 or np.isnan(z_min) or np.isinf(z_min) else z_min
+        z_max = 10.0 if z_max > 10.0 or np.isnan(z_max) or np.isinf(z_max) else z_max
+        
         z_interp = np.linspace(
             z_min, z_max, max(10, int((z_max - z_min) / 0.0001)))
 
         table_engine['d_com'] = np.ascontiguousarray(interp1d(
             z_interp, cosmology.comoving_transverse_distance(z_interp).to(
-                u.Mpc).value)(table['z'])[argsort_pix])
+                u.Mpc).value, bounds_error=False)(table['z'])[argsort_pix])
 
     if table_c is not None and table_n is None:
         z_min = np.amin(table_l['z'])
@@ -402,8 +405,8 @@ def precompute(
         # Overwrite the photometric redshifts in the source table. These
         # redshifts will be used to compute the mean source redshifts for each
         # lens.
-        table_engine_s['z'] = np.ascontiguousarray(
-            z_mean[table_s['z_bin']][argsort_pix_s], dtype=np.float64)
+        # table_engine_s['z'] = np.ascontiguousarray(
+        #     z_mean[table_s['z_bin']][argsort_pix_s], dtype=np.float64)
         z_pz_pivots = None
         d_com_zs = None
     elif use_pz and z_pz_pivots is not None:
@@ -496,7 +499,8 @@ def precompute(
     args = (u_pix_l, n_pix_l, u_pix_s, n_pix_s, dist_3d_sq_bins,
             table_engine_l, table_engine_s, table_engine_r, bins, comoving,
             weighting, nside, queue, z_pz_pivots, d_com_zs, boostFactor_pdf_zbins, progress_bar)
-
+    # print(np.ctypeslib.as_array(table_engine_s['z']) if n_jobs > 1
+    #       else table_engine_s['z'])
     if n_jobs == 1:
         precompute_engine(*args)
     else:
