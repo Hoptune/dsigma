@@ -686,12 +686,13 @@ def excess_surface_density(table_l, table_r=None,
         result['b'] = boost_factor(table_l, table_r)
         result['ds'] *= result['b']
 
-    if pz_boost_correction and not boost_correction:
+    if pz_boost_correction:
         # if table_r is None:
         #     raise ValueError('Cannot compute p(z) boost factor correction without' +
         #                         ' results from a random catalog.')
         result['b_pz'] = boost_factor_from_pz(table_l, table_r)
-        result['ds'] *= result['b_pz']
+        if not boost_correction:
+            result['ds'] *= result['b_pz']
     
     if not return_table:
         return result['ds'].data
