@@ -12,7 +12,7 @@ from astropy.cosmology import FlatLambdaCDM
 from astropy.units import UnitConversionError
 from astropy_healpix import HEALPix
 from scipy.interpolate import interp1d
-
+from .stacking import normalize_pair_pdf
 from .physics import critical_surface_density
 from .physics import effective_critical_surface_density
 from .precompute_engine import precompute_engine
@@ -188,7 +188,8 @@ def precompute(
         table_l, table_s, bins, table_c=None, table_n=None,
         cosmology=FlatLambdaCDM(H0=100, Om0=0.3), comoving=True,
         weighting=-2, lens_source_cut=0, nside=256, n_jobs=1,
-        progress_bar=False, use_pz=False, z_pz_pivots=None, boostFactor_pdf_zbins=np.linspace(.0, 2., 101)):
+        progress_bar=False, use_pz=False, z_pz_pivots=None,
+        boostFactor_pdf_zbins=np.linspace(.0, 2., 101), save_individual_pdfz=False):
     """For all lenses in the catalog, precompute the lensing statistics.
 
     Parameters
@@ -247,6 +248,10 @@ def precompute(
         the source table. Only required if `use_pz` is True.
     boostFactor_pdf_zbins : numpy.ndarray, optional
         The redshift bins used for the p(z) boost factor calibration.
+    save_individual_pdfz : bool, optional
+        Whether to save the individual photometric redshift probability distributions
+        in the results (could be storage-intensive so not recommanded for randoms).
+        Default is False.
     Returns
     -------
     table_l : astropy.table.Table
@@ -540,7 +545,14 @@ def precompute(
             table_l['sum w_ls z_s'] - table_l['sum w_ls'] * np.array(
                 table_engine_l['delta z_s'])[inv_argsort_pix_l][:, np.newaxis])
 
+    table_l.meta['save_individual_pdfz'] = save_individual_pdfz
     table_l.meta['boostFactor_pdf_zbins'] = boostFactor_pdf_zbins
+
+    if not save_individual_pdfz:
+        _pdf, _valididx = normalize_pair_pdf(table_l)
+        table_l.meta['PDF z_s'] = _pdf
+        table_l.meta['PDF valididx'] = _valididx
+        table_l.remove_column('PDF w_ls z_s')
     table_l.meta['bins'] = bins
     table_l.meta['comoving'] = comoving
     table_l.meta['H0'] = cosmology.H0.value

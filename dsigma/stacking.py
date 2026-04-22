@@ -141,41 +141,49 @@ def boost_factor(table_l, table_r):
                table_r['w_sys'].data[:, None], axis=0) *
         np.sum(table_r['w_sys'].data))
 
-def boost_factor_from_pz(table_l, table_r, return_pdf=False, optimize_method='trust-constr'):
+def normalize_pair_pdf(table):
+    z_mids = table.meta['boostFactor_pdf_zbins']
+    z_mids = (z_mids[1:] + z_mids[:-1]) / 2
+    sum_w_ls = np.sum(table['sum w_ls'] * table['w_sys'].data[:, None], axis=0)
+    pdf_hist = np.sum(table['PDF w_ls z_s'] * table['w_sys'].data[:, None, None], axis=0)
+    pdf = np.full(pdf_hist.shape, np.nan, dtype=np.float64)
+    valid = sum_w_ls > 0
+    if not np.any(valid):
+        return pdf, valid
+
+    pdf[valid] = pdf_hist[valid] / sum_w_ls[valid, None]
+    norm = np.trapz(pdf[valid], z_mids, axis=1)
+    finite = np.isfinite(norm) & (norm > 0)
+    valid_indices = np.flatnonzero(valid)
+    valid = np.zeros_like(valid, dtype=bool)
+    if not np.any(finite):
+        pdf[:] = np.nan
+        return pdf, valid
+
+    pdf_valid = pdf[valid_indices[finite]].copy()
+    pdf[:] = np.nan
+    pdf_valid /= norm[finite, None]
+    pdf[valid_indices[finite]] = pdf_valid
+    valid[valid_indices[finite]] = True
+    return pdf, valid
+
+def boost_factor_from_pz(table_l, background, return_pdf=False, optimize_method='trust-constr'):
     assert 'PDF w_ls z_s' in table_l.colnames, 'table_l must contain PDF w_ls z_s column'
     z_bins = table_l.meta['boostFactor_pdf_zbins']
     z_mids = 0.5 * (z_bins[1:] + z_bins[:-1])
-
-    def normalize_pair_pdf(table):
-        sum_w_ls = np.sum(table['sum w_ls'], axis=0)
-        pdf_hist = np.sum(table['PDF w_ls z_s'], axis=0)
-        pdf = np.full(pdf_hist.shape, np.nan, dtype=np.float64)
-        valid = sum_w_ls > 0
-        if not np.any(valid):
-            return pdf, valid
-
-        pdf[valid] = pdf_hist[valid] / sum_w_ls[valid, None]
-        norm = np.trapz(pdf[valid], z_mids, axis=1)
-        finite = np.isfinite(norm) & (norm > 0)
-        valid_indices = np.flatnonzero(valid)
-        valid = np.zeros_like(valid, dtype=bool)
-        if not np.any(finite):
-            pdf[:] = np.nan
-            return pdf, valid
-
-        pdf_valid = pdf[valid_indices[finite]].copy()
-        pdf[:] = np.nan
-        pdf_valid /= norm[finite, None]
-        pdf[valid_indices[finite]] = pdf_valid
-        valid[valid_indices[finite]] = True
-        return pdf, valid
-
-    pdf_z, valid = normalize_pair_pdf(table_l)
-
-    if table_r is not None:
-        pdf_z_r, valid_r = normalize_pair_pdf(table_r)
-        valid &= valid_r
-        background = pdf_z_r
+    if table_l.meta['save_individual_pdfz']:
+        pdf_z, valid = normalize_pair_pdf(table_l)
+    else:
+        pdf_z = table_l.meta['PDF z_s']
+        valid = table_l.meta['PDF valididx']
+    if background is not None:
+        if background.meta['save_individual_pdfz']:
+            pdf_z_r, valid_r = normalize_pair_pdf(background)
+            valid &= valid_r
+            background = pdf_z_r
+        else:
+            pdf_z_r = background.meta['PDF z_s']
+            valid &= background.meta['PDF valididx']
     else:
         background = np.full(pdf_z.shape, np.nan, dtype=np.float64)
         valid_idx = np.flatnonzero(valid)
@@ -626,12 +634,10 @@ def excess_surface_density(table_l, table_r=None,
 
     result['rp_min'] = table_l.meta['bins'][:-1]
     result['rp_max'] = table_l.meta['bins'][1:]
-    result['n_pairs'] = number_of_pairs(table_l)
     result['rp'] = np.sqrt(result['rp_min'] * result['rp_max'])
     result['ds_raw'] = raw_excess_surface_density(table_l)
-    result['ds'] = raw_excess_surface_density(table_l)
-    result['z_l'] = mean_lens_redshift(table_l)
-    result['z_s'] = mean_source_redshift(table_l)
+    # result['ds'] = raw_excess_surface_density(table_l)
+    result['ds'] = result['ds_raw']
 
     if shear_responsivity_correction:
         result['2R'] = 2 * shear_responsivity_factor(table_l)
@@ -680,14 +686,18 @@ def excess_surface_density(table_l, table_r=None,
         result['b'] = boost_factor(table_l, table_r)
         result['ds'] *= result['b']
 
-    if pz_boost_correction:
-        if table_r is None:
-            raise ValueError('Cannot compute p(z) boost factor correction without' +
-                                ' results from a random catalog.')
+    if pz_boost_correction and not boost_correction:
+        # if table_r is None:
+        #     raise ValueError('Cannot compute p(z) boost factor correction without' +
+        #                         ' results from a random catalog.')
         result['b_pz'] = boost_factor_from_pz(table_l, table_r)
-        # result['ds'] *= result['b_pz']
+        result['ds'] *= result['b_pz']
     
     if not return_table:
         return result['ds'].data
+    
+    result['n_pairs'] = number_of_pairs(table_l)
+    result['z_l'] = mean_lens_redshift(table_l)
+    result['z_s'] = mean_source_redshift(table_l)
 
     return result
