@@ -167,28 +167,31 @@ def normalize_pair_pdf(table):
     valid[valid_indices[finite]] = True
     return pdf, valid
 
-def boost_factor_from_pz(table_l, background, return_pdf=False, optimize_method='trust-constr'):
+def boost_factor_from_pz(table_l, return_pdf=False, optimize_method='trust-constr'):
     assert 'PDF w_ls z_s' in table_l.colnames, 'table_l must contain PDF w_ls z_s column'
     z_bins = table_l.meta['boostFactor_pdf_zbins']
     z_mids = 0.5 * (z_bins[1:] + z_bins[:-1])
     if table_l.meta['save_individual_pdfz']:
         pdf_z, valid = normalize_pair_pdf(table_l)
     else:
+        raise Exception("Individual P(z) is not saved. Can't perform boost factor estimates from p(z)!")
         pdf_z = table_l.meta['PDF z_s']
         valid = table_l.meta['PDF valididx']
-    if background is not None:
-        if background.meta['save_individual_pdfz']:
-            pdf_z_r, valid_r = normalize_pair_pdf(background)
-            valid &= valid_r
-            background = pdf_z_r
-        else:
-            pdf_z_r = background.meta['PDF z_s']
-            valid &= background.meta['PDF valididx']
-    else:
-        background = np.full(pdf_z.shape, np.nan, dtype=np.float64)
-        valid_idx = np.flatnonzero(valid)
-        if valid_idx.size:
-            background[valid] = pdf_z[valid_idx[-1]]
+        
+    # if background is not None:
+    #     if background.meta['save_individual_pdfz']:
+    #         pdf_z_r, valid_r = normalize_pair_pdf(background)
+    #         valid &= valid_r
+    #         background = pdf_z_r
+    #     else:
+    #         pdf_z_r = background.meta['PDF z_s']
+    #         valid &= background.meta['PDF valididx']
+    #         background = pdf_z_r
+    # else:
+    background = np.full(pdf_z.shape, np.nan, dtype=np.float64)
+    valid_idx = np.flatnonzero(valid)
+    if valid_idx.size:
+        background[valid] = pdf_z[valid_idx[-1]]
 
     if not np.any(valid):
         raise ValueError('Cannot compute boost factor from p(z): no radial bins have finite pair-weight PDFs.')
@@ -214,7 +217,7 @@ def boost_factor_from_pz(table_l, background, return_pdf=False, optimize_method=
     bounds = [(0, 100), (1e-4, .2)] + [(0, 1)] * n_fit_bins
     init = [0.5, 0.05] + [0.5] * n_fit_bins
     optres = minimize(chisq, init, bounds=bounds, method=optimize_method, tol=1e-6,
-                      options={'maxiter': 1000})
+                      options={'maxiter': 100000})
     if not optres.success:
         raise RuntimeError('Optimization failed: ' + optres.message)
 
@@ -690,7 +693,7 @@ def excess_surface_density(table_l, table_r=None,
         # if table_r is None:
         #     raise ValueError('Cannot compute p(z) boost factor correction without' +
         #                         ' results from a random catalog.')
-        result['b_pz'] = boost_factor_from_pz(table_l, table_r)
+        result['b_pz'] = boost_factor_from_pz(table_l)
         if not boost_correction:
             result['ds'] *= result['b_pz']
     

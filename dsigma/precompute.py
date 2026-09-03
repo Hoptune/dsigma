@@ -437,7 +437,7 @@ def precompute(
     n_results = len(table_l) * (len(bins) - 1)
 
     key_list = ['sum 1', 'sum w_ls', 'sum w_ls e_t', 'sum w_ls z_s',
-                'sum w_ls e_t sigma_crit', 'sum w_ls sigma_crit', 'PDF w_ls z_s']
+                'sum w_ls e_t sigma_crit', 'sum w_ls sigma_crit']
     # PDF w_ls z_s is to get the p(z) of lens-source pairs,
     # which is then used for estimating the boost factor with the p(z) decomposition method.
 
@@ -457,7 +457,10 @@ def precompute(
     if 'c_1' in table_s.colnames and 'c_2' in table_s.colnames:
         key_list.append('sum w_ls c_t')
         key_list.append('sum w_ls c_t sigma_crit')
-
+        
+    if save_individual_pdfz:
+        key_list.append('PDF w_ls z_s')
+        
     for key in key_list:
         if key == 'PDF w_ls z_s':
             table_engine_r[key] = np.ascontiguousarray(
@@ -545,14 +548,15 @@ def precompute(
             table_l['sum w_ls z_s'] - table_l['sum w_ls'] * np.array(
                 table_engine_l['delta z_s'])[inv_argsort_pix_l][:, np.newaxis])
 
-    table_l.meta['save_individual_pdfz'] = save_individual_pdfz
-    table_l.meta['boostFactor_pdf_zbins'] = boostFactor_pdf_zbins
+    if save_individual_pdfz:
+        table_l.meta['save_individual_pdfz'] = save_individual_pdfz
+        table_l.meta['boostFactor_pdf_zbins'] = boostFactor_pdf_zbins
 
-    if not save_individual_pdfz:
-        _pdf, _valididx = normalize_pair_pdf(table_l)
-        table_l.meta['PDF z_s'] = _pdf
-        table_l.meta['PDF valididx'] = _valididx
-        table_l.remove_column('PDF w_ls z_s')
+    # if not save_individual_pdfz:
+    #     _pdf, _valididx = normalize_pair_pdf(table_l)
+    #     table_l.meta['PDF z_s'] = _pdf
+    #     table_l.meta['PDF valididx'] = _valididx
+    #     table_l.remove_column('PDF w_ls z_s')
     table_l.meta['bins'] = bins
     table_l.meta['comoving'] = comoving
     table_l.meta['H0'] = cosmology.H0.value

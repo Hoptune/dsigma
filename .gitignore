@@ -13,3 +13,4 @@ tutorial/*
 !tutorial/*.csv
 .codex
 .vscode/*
+*.ipynb_checkpoints*
