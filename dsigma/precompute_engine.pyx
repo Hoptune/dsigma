@@ -129,13 +129,14 @@ def precompute_engine(
 
     cdef double[::1] dist_3d_sq_bins = dist_3d_sq_bins_in
 
+    cdef bint calcu_pdfz = 'PDF w_ls z_s' in table_r.keys()
+    
     cdef long[::1] sum_1 = table_r['sum 1']
     cdef double[::1] sum_w_ls = table_r['sum w_ls']
     cdef double[::1] sum_w_ls_e_t = table_r['sum w_ls e_t']
     cdef double[::1] sum_w_ls_e_t_sigma_crit = table_r['sum w_ls e_t sigma_crit']
     cdef double[::1] sum_w_ls_sigma_crit = table_r['sum w_ls sigma_crit']
     cdef double[::1] sum_w_ls_z_s = table_r['sum w_ls z_s']
-    cdef double[::1] pdf_w_ls_z_s = table_r['PDF w_ls z_s']
     cdef double[::1] sum_w_ls_m
     if has_m:
         sum_w_ls_m = table_r['sum w_ls m']
@@ -154,6 +155,10 @@ def precompute_engine(
         sum_w_ls_c_t = table_r['sum w_ls c_t']
         sum_w_ls_c_t_sigma_crit = table_r['sum w_ls c_t sigma_crit']
 
+    cdef double[::1] pdf_w_ls_z_s
+    if calcu_pdfz:
+        pdf_w_ls_z_s = table_r['PDF w_ls z_s']
+    
     hp = HEALPix(nside, order='ring')
     lon, lat = hp.healpix_to_lonlat(np.arange(hp.npix))
     x = np.cos(lon) * np.cos(lat)
@@ -313,17 +318,18 @@ def precompute_engine(
                     sum_w_ls_z_s[offset_result + i_bin] += w_ls * z_s[i_s]
                     sum_w_ls_sigma_crit[offset_result + i_bin] += w_ls * sigma_crit
 
-                    boost_zbin_coord = (
-                        (z_s[i_s] - boostFactor_pdf_zbins_view[0]) /
-                        (boostFactor_pdf_zbins_view[1] -
-                         boostFactor_pdf_zbins_view[0]))
-                    if (boost_zbin_coord < 0 or
-                            boost_zbin_coord >= n_boostFactor_zbins or
-                            isnan(boost_zbin_coord)):
-                        pass
-                    else:
-                        i_boost_zbin = <long>boost_zbin_coord
-                        pdf_w_ls_z_s[offset_result*n_boostFactor_zbins + i_bin*n_boostFactor_zbins + i_boost_zbin] += w_ls
+                    if calcu_pdfz:
+                        boost_zbin_coord = (
+                            (z_s[i_s] - boostFactor_pdf_zbins_view[0]) /
+                            (boostFactor_pdf_zbins_view[1] -
+                             boostFactor_pdf_zbins_view[0]))
+                        if (boost_zbin_coord < 0 or
+                                boost_zbin_coord >= n_boostFactor_zbins or
+                                isnan(boost_zbin_coord)):
+                            pass
+                        else:
+                            i_boost_zbin = <long>boost_zbin_coord
+                            pdf_w_ls_z_s[offset_result*n_boostFactor_zbins + i_bin*n_boostFactor_zbins + i_boost_zbin] += w_ls
                     if has_m:
                         sum_w_ls_m[offset_result + i_bin] += w_ls * m[i_s]
                     if has_c1_c2:
